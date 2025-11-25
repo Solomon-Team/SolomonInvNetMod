@@ -16,19 +16,12 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.example.ExampleMod"
+          "com.BookKeeper.InventoryNetwork.InventoryNetworkMod"
 		],
 		"client": [
-			"com.example.ExampleModClient"
+          "com.BookKeeper.InventoryNetwork.InventoryNetworkModClient"
 		]
 	},
-	"mixins": [
-		"modid.mixins.json",
-		{
-			"config": "modid.client.mixins.json",
-			"environment": "client"
-		}
-	],
 	"depends": {
 		"fabricloader": ">=0.17.3",
 		"minecraft": "~1.21.10",
