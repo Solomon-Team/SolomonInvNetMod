@@ -41,9 +41,16 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 	// BookKeeper API
 	private BookKeeperConfig config;
 	private ApiClient apiClient;
+	private WebSocketManager webSocketManager;
 
 	// Magic link cooldown tracking
 	private long lastMagicLinkRequest = 0;
+
+	// JWT token cached after magic link authentication (memory only, not persisted)
+	private String cachedJwtToken = null;
+
+	// Tick counter for periodic tasks
+	private int tickCounter = 0;
 
 	// Track if chest was open in previous tick (for detecting close)
 	private boolean wasChestOpen = false;
@@ -66,6 +73,10 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		apiClient = new ApiClient(config.getApiBaseUrl());
 		InventoryNetworkMod.LOGGER.info("BookKeeper API client initialized with URL: {}", config.getApiBaseUrl());
 
+		// Initialize WebSocket manager
+		webSocketManager = WebSocketManager.getInstance();
+		InventoryNetworkMod.LOGGER.info("WebSocket manager initialized");
+
 		// Initialize modules
 		chestTracker = new ChestTracker(databaseManager);
 		chestHighlighter = new ChestHighlighter(databaseManager);
@@ -86,6 +97,11 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		// Register player join event for magic link
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
 			onPlayerJoin(client);
+		});
+
+		// Register player disconnect event for WebSocket cleanup
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+			onPlayerDisconnect(client);
 		});
 
 		// Register block use callback to track which chest the player clicks
@@ -192,6 +208,8 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 	}
 
 	private void onClientTick(Minecraft client) {
+		tickCounter++;
+
 		// Check if chest was closed (screen changed from chest to non-chest)
 		boolean isChestOpen = false;
 		Screen currentScreen = client.screen;
@@ -207,6 +225,14 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		}
 
 		wasChestOpen = isChestOpen;
+
+		// Check WebSocket connection health every 20 ticks (1 second)
+		if (client.player != null && tickCounter % 20 == 0) {
+			if (!webSocketManager.isConnected() && cachedJwtToken != null) {
+				// Attempt reconnect if we have token but not connected
+				webSocketManager.attemptReconnect();
+			}
+		}
 
 		// Tick all modules
 		chestTracker.tick(client);
@@ -252,6 +278,28 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 						sendMagicLinkMessage(client.player, response);
 					}
 				});
+
+				// Wait a bit for user to click the link (5 seconds)
+				// In production, this would be triggered by user action
+				try {
+					Thread.sleep(5000);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				}
+
+				// Exchange magic token for JWT
+				InventoryNetworkMod.LOGGER.info("Exchanging magic token for JWT");
+				String jwtToken = apiClient.exchangeMagicToken(response.token);
+
+				if (jwtToken != null) {
+					// Connect WebSocket with JWT token
+					client.execute(() -> {
+						onAuthenticationComplete(jwtToken);
+					});
+				} else {
+					InventoryNetworkMod.LOGGER.error("Failed to exchange magic token for JWT");
+				}
 			} else {
 				InventoryNetworkMod.LOGGER.error("Failed to request magic link");
 			}
@@ -285,5 +333,30 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		}
 
 		InventoryNetworkMod.LOGGER.info("Magic link sent to player: {}", response.magicUrl);
+	}
+
+	/**
+	 * Called when player disconnects from server/world.
+	 * Closes WebSocket connection and clears cached token.
+	 */
+	private void onPlayerDisconnect(Minecraft client) {
+		InventoryNetworkMod.LOGGER.info("Player disconnected, closing WebSocket");
+		webSocketManager.disconnect();
+		cachedJwtToken = null;
+	}
+
+	/**
+	 * Called after magic link authentication is complete with JWT token.
+	 * Connects WebSocket with the obtained JWT token.
+	 *
+	 * @param jwtToken JWT access token from magic link exchange
+	 */
+	public void onAuthenticationComplete(String jwtToken) {
+		InventoryNetworkMod.LOGGER.info("Authentication complete, connecting WebSocket");
+		this.cachedJwtToken = jwtToken;
+
+		// Connect WebSocket with token
+		String baseUrl = config.getApiBaseUrl();
+		webSocketManager.connect(baseUrl, jwtToken);
 	}
 }

@@ -1,5 +1,5 @@
 {
-  "apiBaseUrl": "https://bookkeeperbe.onrender.com",
+  "apiBaseUrl": "http://localhost:8000",
   "autoMagicLink": true,
   "magicLinkCooldownSeconds": 60
 }

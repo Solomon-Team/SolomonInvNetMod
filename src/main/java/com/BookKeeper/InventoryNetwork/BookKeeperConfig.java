@@ -15,7 +15,7 @@ public class BookKeeperConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     // Configuration values
-    private String apiBaseUrl = "https://bookkeeperbe.onrender.com";
+    private String apiBaseUrl = "http://localhost:8000";
     private boolean autoMagicLink = true;
     private int magicLinkCooldownSeconds = 60;
 

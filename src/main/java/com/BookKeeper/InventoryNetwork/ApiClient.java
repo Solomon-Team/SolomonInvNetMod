@@ -120,6 +120,47 @@ public class ApiClient {
         }
     }
 
+    /**
+     * Exchange magic token for JWT access token.
+     * This simulates the frontend's magic-login endpoint call.
+     *
+     * @param magicToken The magic token from requestMagicLink()
+     * @return JWT access token, or null if exchange failed
+     */
+    public String exchangeMagicToken(String magicToken) {
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("token", magicToken);
+
+        RequestBody body = RequestBody.create(gson.toJson(requestBody), JSON);
+        Request request = new Request.Builder()
+                .url(baseUrl + "/api/auth/magic-login")
+                .post(body)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                LOGGER.error("Failed to exchange magic token: HTTP {}", response.code());
+                return null;
+            }
+
+            String responseBody = response.body().string();
+            JsonObject json = gson.fromJson(responseBody, JsonObject.class);
+
+            // Extract JWT token from response (field is "access_token", not "token")
+            if (json.has("access_token")) {
+                String jwtToken = json.get("access_token").getAsString();
+                LOGGER.info("Successfully exchanged magic token for JWT");
+                return jwtToken;
+            }
+
+            LOGGER.error("No access_token in magic-login response. Response: {}", responseBody);
+            return null;
+        } catch (IOException e) {
+            LOGGER.error("Failed to exchange magic token", e);
+            return null;
+        }
+    }
+
     // Response classes
     public static class MagicLinkResponse {
         public String token;
