@@ -57,8 +57,8 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 
 		InventoryNetworkMod.LOGGER.info("Inventory Network database initialized at: {}", dbPath);
 
-		// Load BookKeeper configuration
-		File configFile = new File(minecraftDir, "config/inventory_network.json");
+		// Load BookKeeper configuration from project root
+		File configFile = new File("config/inventory_network.json");
 		config = BookKeeperConfig.getInstance();
 		config.load(configFile);
 
