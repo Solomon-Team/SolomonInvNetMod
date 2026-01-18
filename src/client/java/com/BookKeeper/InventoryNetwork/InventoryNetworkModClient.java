@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class InventoryNetworkModClient implements ClientModInitializer {
 	// Module instances
-	private DatabaseManager databaseManager;
+	// DatabaseManager removed - server is now source of truth
 	private ChestTracker chestTracker;
 	private ChestHighlighter chestHighlighter;
 	private EntityTracker entityTracker;
@@ -57,12 +57,8 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
-		// Initialize database in the Minecraft directory
-		File minecraftDir = Minecraft.getInstance().gameDirectory;
-		String dbPath = new File(minecraftDir, "inventory_network/chests_db").getAbsolutePath();
-		databaseManager = DatabaseManager.getInstance(dbPath);
-
-		InventoryNetworkMod.LOGGER.info("Inventory Network database initialized at: {}", dbPath);
+		// Database removed - server is now the single source of truth for chest data
+		InventoryNetworkMod.LOGGER.info("Inventory Network client initialized (server-backed mode)");
 
 		// Load BookKeeper configuration from project root
 		File configFile = new File("config/inventory_network.json");
@@ -77,13 +73,13 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		webSocketManager = WebSocketManager.getInstance();
 		InventoryNetworkMod.LOGGER.info("WebSocket manager initialized");
 
-		// Initialize modules
-		chestTracker = new ChestTracker(databaseManager);
-		chestHighlighter = new ChestHighlighter(databaseManager);
+		// Initialize modules (UI now uses ChestSyncManager as source of truth)
+		chestTracker = new ChestTracker(apiClient);
+		chestHighlighter = new ChestHighlighter(ChestSyncManager.getInstance());
 		entityTracker = new EntityTracker();
-		commandHandler = new CommandHandler(databaseManager, chestTracker);
-		playerNameColorManager = new PlayerNameColorManager(databaseManager);
-		inventoryPanelOverlay = new InventoryPanelOverlay(databaseManager, chestHighlighter);
+		commandHandler = new CommandHandler(chestTracker);
+		playerNameColorManager = new PlayerNameColorManager();
+		inventoryPanelOverlay = new InventoryPanelOverlay(ChestSyncManager.getInstance(), chestHighlighter, apiClient);
 
 		// Initialize entity tracker (registers keybind)
 		entityTracker.initialize();
@@ -123,12 +119,7 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		// Register client tick event
 		ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
 
-		// Register shutdown hook to close database properly
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-			if (databaseManager != null) {
-				databaseManager.close();
-			}
-		}));
+		// Database removed - no shutdown hook needed
 	}
 
 	private void onScreenOpen(Minecraft client, Screen screen, int scaledWidth, int scaledHeight) {

@@ -28,6 +28,10 @@ public class ApiClient {
                 .build();
     }
 
+    public String getBaseUrl() {
+        return baseUrl;
+    }
+
     /**
      * Request a magic login link for the player.
      * Returns the magic URL that the player can click to login.
@@ -157,6 +161,88 @@ public class ApiClient {
             return null;
         } catch (IOException e) {
             LOGGER.error("Failed to exchange magic token", e);
+            return null;
+        }
+    }
+
+    /**
+     * Send chest data to backend for ChestSync feature.
+     * This enables real-time chest inventory synchronization across all clients.
+     *
+     * @param jwtToken JWT access token for authentication
+     * @param mcUuid Player UUID
+     * @param mcName Player username
+     * @param x Chest X coordinate
+     * @param y Chest Y coordinate
+     * @param z Chest Z coordinate
+     * @param containerData Chest contents as JsonObject (items JSON)
+     * @param signsData Signs data as JsonObject (optional)
+     * @return true if successful, false otherwise
+     */
+    public boolean sendChestData(String jwtToken, UUID mcUuid, String mcName,
+                                  int x, int y, int z,
+                                  JsonObject containerData, JsonObject signsData) {
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("uuid", mcUuid.toString());
+        requestBody.addProperty("username", mcName);
+        requestBody.addProperty("x", x);
+        requestBody.addProperty("y", y);
+        requestBody.addProperty("z", z);
+        requestBody.addProperty("event", "Container");
+        requestBody.add("Container", containerData);
+        if (signsData != null) {
+            requestBody.add("Signs", signsData);
+        }
+
+        RequestBody body = RequestBody.create(gson.toJson(requestBody), JSON);
+        Request request = new Request.Builder()
+                .url(baseUrl + "/api/mc/events/jwt")
+                .addHeader("Authorization", "Bearer " + jwtToken)
+                .post(body)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                LOGGER.error("Failed to send chest data: HTTP {} at ({}, {}, {})",
+                        response.code(), x, y, z);
+                return false;
+            }
+
+            LOGGER.debug("Successfully sent chest data at ({}, {}, {})", x, y, z);
+            return true;
+        } catch (IOException e) {
+            LOGGER.error("Failed to send chest data at ({}, {}, {})", x, y, z, e);
+            return false;
+        }
+    }
+
+    /**
+     * Fetch all chest data from the server.
+     * This is the REST API fallback when WebSocket is disconnected or data needs to be refreshed.
+     * Server is the single source of truth for chest data.
+     *
+     * @param jwtToken JWT authentication token
+     * @return JsonObject containing chest data, or null if failed
+     */
+    public JsonObject fetchAllChests(String jwtToken) {
+        Request request = new Request.Builder()
+                .url(baseUrl + "/api/mc/chests")
+                .addHeader("Authorization", "Bearer " + jwtToken)
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                LOGGER.error("Failed to fetch chest data: HTTP {}", response.code());
+                return null;
+            }
+
+            String responseBody = response.body().string();
+            JsonObject data = gson.fromJson(responseBody, JsonObject.class);
+            LOGGER.info("Successfully fetched chest data from server");
+            return data;
+        } catch (IOException e) {
+            LOGGER.error("Failed to fetch chest data from server", e);
             return null;
         }
     }

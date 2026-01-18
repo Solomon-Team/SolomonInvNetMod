@@ -39,9 +39,7 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-	// H2 Database for local storage
-	implementation 'com.h2database:h2:2.2.224'
-	include 'com.h2database:h2:2.2.224'
+	// H2 Database removed - server is now source of truth
 
 	// HTTP client for BookKeeper API
 	implementation 'com.squareup.okhttp3:okhttp:4.12.0'

@@ -1,6 +1,7 @@
 package com.BookKeeper.InventoryNetwork.ui;
 
-import com.BookKeeper.InventoryNetwork.DatabaseManager;
+import com.BookKeeper.InventoryNetwork.ChestSyncManager;
+import com.google.gson.JsonObject;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -9,7 +10,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Grid widget that displays items from the database.
@@ -56,20 +59,37 @@ public class ItemGridWidget {
 	}
 
 	/**
-	 * Loads items from the database.
+	 * Loads items from ChestSyncManager (server as source of truth).
+	 * Aggregates all items across all synced chests.
 	 */
-	public void loadItems(DatabaseManager db, String dimension) {
+	public void loadItems(ChestSyncManager chestSync) {
 		allItems.clear();
 
-		List<DatabaseManager.ItemData> itemDataList = dimension == null
-			? db.getAllUniqueItems()
-			: db.getAllUniqueItemsInDimension(dimension);
+		// Aggregate items from all chests
+		Map<String, Integer> itemCounts = new HashMap<>();
 
-		for (DatabaseManager.ItemData itemData : itemDataList) {
-			Item item = getItemFromId(itemData.itemId);
+		for (ChestSyncManager.ChestSnapshot chest : chestSync.getAllChests()) {
+			if (chest.items == null) continue;
+
+			// Iterate through all slots in the chest
+			for (String slotKey : chest.items.keySet()) {
+				JsonObject itemObj = chest.items.getAsJsonObject(slotKey);
+				if (itemObj.has("id")) {
+					String itemId = itemObj.get("id").getAsString();
+					int count = itemObj.has("count") ? itemObj.get("count").getAsInt() : 1;
+
+					// Aggregate counts
+					itemCounts.put(itemId, itemCounts.getOrDefault(itemId, 0) + count);
+				}
+			}
+		}
+
+		// Convert aggregated data to ItemStack list
+		for (Map.Entry<String, Integer> entry : itemCounts.entrySet()) {
+			Item item = getItemFromId(entry.getKey());
 			if (item != null && item != Items.AIR) {
 				ItemStack stack = new ItemStack(item);
-				stack.setCount(itemData.totalCount);
+				stack.setCount(entry.getValue());
 				allItems.add(stack);
 			}
 		}

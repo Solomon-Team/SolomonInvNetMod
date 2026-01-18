@@ -86,6 +86,10 @@ public class WebSocketManager {
         }
         isConnected = false;
         currentToken = null;
+
+        // Clear ChestSync data on disconnect
+        ChestSyncManager.getInstance().clear();
+
         LOGGER.info("WebSocket disconnected");
     }
 
@@ -115,6 +119,16 @@ public class WebSocketManager {
      */
     public boolean isConnected() {
         return isConnected;
+    }
+
+    /**
+     * Get current JWT token for authenticated API calls.
+     * Used by other components (e.g., ChestTracker) to make authenticated requests.
+     *
+     * @return JWT token, or null if not connected
+     */
+    public String getJwtToken() {
+        return currentToken;
     }
 
     /**
@@ -159,11 +173,61 @@ public class WebSocketManager {
                     LOGGER.info("WebSocket authenticated: user_id={}, username={}, structure={}",
                             userId, username, structureId);
                     break;
+                case "chest_full_state":
+                    handleChestFullState(json);
+                    break;
+                case "chest_update":
+                    handleChestUpdate(json);
+                    break;
                 default:
                     LOGGER.warn("Unknown message type: {}", type);
             }
         } catch (Exception e) {
             LOGGER.error("Failed to parse WebSocket message", e);
+        }
+    }
+
+    /**
+     * Handle full chest state message received on connection.
+     * Replaces all local chest data with the complete state from server.
+     */
+    private void handleChestFullState(JsonObject json) {
+        try {
+            ChestSyncManager.getInstance().handleFullState(json);
+
+            // Display notification in chat
+            if (json.has("summary")) {
+                JsonObject summary = json.getAsJsonObject("summary");
+                int totalChests = summary.get("total_chests").getAsInt();
+                displayChatMessage(
+                    String.format("§6[ChestSync]§r Synchronized %d chests", totalChests),
+                    true
+                );
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to handle chest full state", e);
+        }
+    }
+
+    /**
+     * Handle incremental chest update message.
+     * Updates a single chest in the local cache when another player opens it.
+     */
+    private void handleChestUpdate(JsonObject json) {
+        try {
+            ChestSyncManager.getInstance().handleChestUpdate(json);
+
+            // Optionally display notification (can be toggled by config later)
+            if (json.has("chest")) {
+                JsonObject chest = json.getAsJsonObject("chest");
+                int x = chest.get("x").getAsInt();
+                int y = chest.get("y").getAsInt();
+                int z = chest.get("z").getAsInt();
+
+                LOGGER.debug("Chest updated at ({}, {}, {}) from other player", x, y, z);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to handle chest update", e);
         }
     }
 
