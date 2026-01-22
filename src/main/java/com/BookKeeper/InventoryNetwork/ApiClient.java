@@ -7,6 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -244,6 +246,123 @@ public class ApiClient {
         } catch (IOException e) {
             LOGGER.error("Failed to fetch chest data from server", e);
             return null;
+        }
+    }
+
+    /**
+     * Upload a schematic file to the backend.
+     * Uses multipart/form-data for file upload.
+     *
+     * @param jwtToken JWT access token for authentication
+     * @param file Path to the schematic file
+     * @param name Display name for the schematic
+     * @return Schematic ID on success, or null on failure
+     */
+    public String uploadSchematic(String jwtToken, Path file, String name) {
+        try {
+            String fileName = file.getFileName().toString();
+            byte[] fileBytes = Files.readAllBytes(file);
+
+            RequestBody fileBody = RequestBody.create(fileBytes, MediaType.parse("application/octet-stream"));
+
+            MultipartBody requestBody = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("file", fileName, fileBody)
+                    .addFormDataPart("name", name)
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url(baseUrl + "/api/schematics/upload")
+                    .addHeader("Authorization", "Bearer " + jwtToken)
+                    .post(requestBody)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    LOGGER.error("Failed to upload schematic: HTTP {}", response.code());
+                    return null;
+                }
+
+                String responseBody = response.body().string();
+                JsonObject json = gson.fromJson(responseBody, JsonObject.class);
+
+                if (json.has("id")) {
+                    String schematicId = json.get("id").getAsString();
+                    LOGGER.info("Successfully uploaded schematic '{}' with ID: {}", name, schematicId);
+                    return schematicId;
+                }
+
+                LOGGER.error("No id in upload response. Response: {}", responseBody);
+                return null;
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to upload schematic '{}'", name, e);
+            return null;
+        }
+    }
+
+    /**
+     * Download a schematic file from the backend.
+     *
+     * @param jwtToken JWT access token for authentication
+     * @param id Schematic ID to download
+     * @param target Target path to save the downloaded file
+     * @return true on success, false on failure
+     */
+    public boolean downloadSchematic(String jwtToken, String id, Path target) {
+        Request request = new Request.Builder()
+                .url(baseUrl + "/api/schematics/" + id + "/download")
+                .addHeader("Authorization", "Bearer " + jwtToken)
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                LOGGER.error("Failed to download schematic {}: HTTP {}", id, response.code());
+                return false;
+            }
+
+            byte[] data = response.body().bytes();
+
+            // Ensure parent directories exist
+            Files.createDirectories(target.getParent());
+            Files.write(target, data);
+
+            LOGGER.info("Successfully downloaded schematic {} to {}", id, target);
+            return true;
+        } catch (IOException e) {
+            LOGGER.error("Failed to download schematic {}", id, e);
+            return false;
+        }
+    }
+
+    /**
+     * Post split results from KDTreeSplitter to the backend.
+     *
+     * @param jwtToken JWT access token for authentication
+     * @param schematicId Schematic ID the results belong to
+     * @param jsonResults JSON string containing split results
+     * @return true on success, false on failure
+     */
+    public boolean postSplitResults(String jwtToken, int schematicId, String jsonResults) {
+        RequestBody body = RequestBody.create(jsonResults, JSON);
+        Request request = new Request.Builder()
+                .url(baseUrl + "/api/schematics/" + schematicId + "/split-results")
+                .addHeader("Authorization", "Bearer " + jwtToken)
+                .post(body)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                LOGGER.error("Failed to post split results for schematic {}: HTTP {}", schematicId, response.code());
+                return false;
+            }
+
+            LOGGER.info("Successfully posted split results for schematic {}", schematicId);
+            return true;
+        } catch (IOException e) {
+            LOGGER.error("Failed to post split results for schematic {}", schematicId, e);
+            return false;
         }
     }
 

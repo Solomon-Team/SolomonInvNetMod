@@ -1,5 +1,6 @@
 package com.BookKeeper.InventoryNetwork;
 
+import com.BookKeeper.InventoryNetwork.api.SchematicSyncApiImpl;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,9 @@ public class WebSocketManager {
     private static final int MAX_BACKOFF = 30000;  // Max 30 seconds
 
     private final Gson gson = new Gson();
+
+    // SchematicSync API for notifying SolomonMatica of load requests
+    private SchematicSyncApiImpl schematicSyncApi;
 
     private WebSocketManager() {
         // OkHttp client with WebSocket support
@@ -132,6 +136,44 @@ public class WebSocketManager {
     }
 
     /**
+     * Set the SchematicSyncApi implementation for handling load_schematic messages.
+     *
+     * @param api The SchematicSyncApiImpl instance
+     */
+    public void setSchematicSyncApi(SchematicSyncApiImpl api) {
+        this.schematicSyncApi = api;
+    }
+
+    /**
+     * Send acknowledgment for a load_schematic request.
+     *
+     * @param requestId Request ID from the load_schematic message
+     * @param success Whether the operation was successful
+     * @param error Error message if failed, or null
+     */
+    public void sendLoadSchematicAck(String requestId, boolean success, String error) {
+        if (!isConnected || webSocket == null) {
+            LOGGER.warn("Cannot send load_schematic_ack: not connected");
+            return;
+        }
+
+        try {
+            JsonObject ack = new JsonObject();
+            ack.addProperty("type", "load_schematic_ack");
+            ack.addProperty("request_id", requestId);
+            ack.addProperty("success", success);
+            if (error != null) {
+                ack.addProperty("error", error);
+            }
+
+            webSocket.send(gson.toJson(ack));
+            LOGGER.debug("Sent load_schematic_ack: requestId={}, success={}", requestId, success);
+        } catch (Exception e) {
+            LOGGER.error("Failed to send load_schematic_ack", e);
+        }
+    }
+
+    /**
      * Send pong response to server ping.
      */
     private void sendPong() {
@@ -178,6 +220,9 @@ public class WebSocketManager {
                     break;
                 case "chest_update":
                     handleChestUpdate(json);
+                    break;
+                case "load_schematic":
+                    handleLoadSchematic(json);
                     break;
                 default:
                     LOGGER.warn("Unknown message type: {}", type);
@@ -228,6 +273,38 @@ public class WebSocketManager {
             }
         } catch (Exception e) {
             LOGGER.error("Failed to handle chest update", e);
+        }
+    }
+
+    /**
+     * Handle load_schematic message from server.
+     * Notifies SolomonMatica (via SchematicSyncApi) to load a schematic at specific coordinates.
+     */
+    private void handleLoadSchematic(JsonObject json) {
+        try {
+            String schematicId = json.get("schematic_id").getAsString();
+            int x = json.get("x").getAsInt();
+            int y = json.get("y").getAsInt();
+            int z = json.get("z").getAsInt();
+            String requestId = json.get("request_id").getAsString();
+
+            LOGGER.info("Received load_schematic request: schematic={}, pos=({}, {}, {}), requestId={}",
+                    schematicId, x, y, z, requestId);
+
+            if (schematicSyncApi != null) {
+                // Execute on Minecraft main thread to ensure thread safety
+                Minecraft.getInstance().execute(() -> {
+                    schematicSyncApi.notifyLoadSchematicCallbacks(schematicId, x, y, z, requestId);
+                });
+            } else {
+                LOGGER.warn("SchematicSyncApi not initialized - cannot handle load_schematic request");
+                sendLoadSchematicAck(requestId, false, "SchematicSyncApi not initialized");
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to handle load_schematic message", e);
+            if (json.has("request_id")) {
+                sendLoadSchematicAck(json.get("request_id").getAsString(), false, e.getMessage());
+            }
         }
     }
 

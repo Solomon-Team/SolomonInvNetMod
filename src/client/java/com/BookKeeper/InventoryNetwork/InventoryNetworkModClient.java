@@ -1,5 +1,7 @@
 package com.BookKeeper.InventoryNetwork;
 
+import com.BookKeeper.InventoryNetwork.api.SchematicSyncApiImpl;
+import com.BookKeeper.InventoryNetwork.api.SchematicSyncApiProvider;
 import com.BookKeeper.InventoryNetwork.ui.InventoryPanelOverlay;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -42,6 +44,7 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 	private BookKeeperConfig config;
 	private ApiClient apiClient;
 	private WebSocketManager webSocketManager;
+	private SchematicSyncApiImpl schematicSyncApi;
 
 	// Magic link cooldown tracking
 	private long lastMagicLinkRequest = 0;
@@ -72,6 +75,12 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 		// Initialize WebSocket manager
 		webSocketManager = WebSocketManager.getInstance();
 		InventoryNetworkMod.LOGGER.info("WebSocket manager initialized");
+
+		// Initialize SchematicSync API for SolomonMatica integration
+		schematicSyncApi = new SchematicSyncApiImpl(apiClient, webSocketManager);
+		SchematicSyncApiProvider.setApi(schematicSyncApi);
+		webSocketManager.setSchematicSyncApi(schematicSyncApi);
+		InventoryNetworkMod.LOGGER.info("SchematicSyncApi initialized and registered");
 
 		// Initialize modules (UI now uses ChestSyncManager as source of truth)
 		chestTracker = new ChestTracker(apiClient);
