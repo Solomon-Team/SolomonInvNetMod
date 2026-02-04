@@ -1,0 +1,213 @@
+/* Pinecrest Theme - Matching SolomonWebsite */
+:root {
+  --bg: #121a3a;
+  --surface: #1a2552;
+  --surface-hover: #223066;
+  --gold: #f8d038;
+  --gold-dark: #c9a82d;
+  --gold-light: #fff3c4;
+  --teal: #35c6c6;
+  --teal-dark: #2a9e9e;
+  --text: #e0f0f0;
+  --text-muted: #9fb0d0;
+  --text-dark: #1a1a2e;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-medium: rgba(255, 255, 255, 0.23);
+  --success: #3bb273;
+  --success-dark: #2e8a5a;
+  --error: #e65a5a;
+  --error-dark: #c44848;
+  --warning: #f5a623;
+  --warning-dark: #d08b1d;
+  --info: #4a90d9;
+  --info-dark: #3a73b3;
+  --radius: 8px;
+  --radius-sm: 4px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3a76;
+}
+
+/* Typography */
+h1 { font-size: 2rem; font-weight: 700; }
+h2 { font-size: 1.5rem; font-weight: 600; }
+h3 { font-size: 1.25rem; font-weight: 600; }
+h4 { font-size: 1rem; font-weight: 600; }
+
+.muted { color: var(--text-muted); }
+.gold { color: var(--gold); }
+.teal { color: var(--teal); }
+.success { color: var(--success); }
+.error { color: var(--error); }
+.warning { color: var(--warning); }
+
+/* Buttons */
+button, .btn {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  outline: none;
+}
+
+button:active, .btn:active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: var(--text-dark);
+}
+
+.btn-primary:hover {
+  background: var(--gold-dark);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--teal);
+  border: 1px solid var(--teal);
+}
+
+.btn-secondary:hover {
+  background: rgba(53, 198, 198, 0.15);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--surface-hover);
+}
+
+/* Inputs */
+input, select, textarea {
+  font-family: inherit;
+  font-size: 14px;
+  background: rgba(18, 26, 58, 0.5);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:hover, select:hover, textarea:hover {
+  border-color: var(--gold);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(248, 208, 56, 0.2);
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239fb0d0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* Cards/Panels */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Chips/Badges */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chip-success {
+  background: rgba(59, 178, 115, 0.15);
+  color: var(--success);
+}
+
+.chip-error {
+  background: rgba(230, 90, 90, 0.15);
+  color: var(--error);
+}
+
+.chip-warning {
+  background: rgba(245, 166, 35, 0.15);
+  color: var(--warning);
+}
+
+.chip-info {
+  background: rgba(74, 144, 217, 0.15);
+  color: var(--info);
+}
+
+/* Utility Classes */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.p-2 { padding: 8px; }
+.p-3 { padding: 12px; }
+.p-4 { padding: 16px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+.text-sm { font-size: 12px; }
+.text-lg { font-size: 18px; }
+.font-mono { font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; }
+.font-bold { font-weight: 700; }
+.font-semibold { font-weight: 600; }
