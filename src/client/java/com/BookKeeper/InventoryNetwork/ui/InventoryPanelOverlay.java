@@ -1,17 +1,21 @@
 package com.BookKeeper.InventoryNetwork.ui;
 
+import com.BookKeeper.InventoryNetwork.ApiClient;
 import com.BookKeeper.InventoryNetwork.ChestHighlighter;
-import com.BookKeeper.InventoryNetwork.DatabaseManager;
+import com.BookKeeper.InventoryNetwork.ChestSyncManager;
+import com.BookKeeper.InventoryNetwork.WebSocketManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 /**
  * Main overlay controller for the inventory panel UI.
  * Manages the grid, search box, dimension toggle, and coordinates rendering.
+ * Now uses ChestSyncManager as the single source of truth (server data).
  */
 public class InventoryPanelOverlay {
 	// JEI-style layout constants
@@ -23,9 +27,12 @@ public class InventoryPanelOverlay {
 	private static final int GRID_COLUMNS = 6;
 	private static final int GRID_ROWS = 9;
 	private static final int NAVIGATION_HEIGHT = 20;   // Navigation bar height (like JEI)
+	private static final int REFRESH_BUTTON_WIDTH = 50;
+	private static final int REFRESH_BUTTON_HEIGHT = 14;
 
-	private final DatabaseManager databaseManager;
+	private final ChestSyncManager chestSyncManager;
 	private final ChestHighlighter chestHighlighter;
+	private final ApiClient apiClient;
 
 	private ItemGridWidget itemGrid;
 	private SearchBoxWidget searchBox;
@@ -35,11 +42,26 @@ public class InventoryPanelOverlay {
 	private int panelWidth;
 	private int panelHeight;
 
+	// Refresh button state
+	private int refreshButtonX;
+	private int refreshButtonY;
+	private boolean isRefreshing = false;
+	private long lastRefreshTime = 0;
+	private static final long REFRESH_COOLDOWN_MS = 2000; // 2 seconds cooldown
+
 	private boolean initialized = false;
 
-	public InventoryPanelOverlay(DatabaseManager databaseManager, ChestHighlighter chestHighlighter) {
-		this.databaseManager = databaseManager;
+	public InventoryPanelOverlay(ChestSyncManager chestSyncManager, ChestHighlighter chestHighlighter, ApiClient apiClient) {
+		this.chestSyncManager = chestSyncManager;
 		this.chestHighlighter = chestHighlighter;
+		this.apiClient = apiClient;
+
+		// Register listener for automatic UI refresh when server data changes
+		chestSyncManager.addUpdateListener(update -> {
+			if (initialized) {
+				loadItems(); // Reload items when server data updates
+			}
+		});
 	}
 
 	/**
@@ -78,6 +100,10 @@ public class InventoryPanelOverlay {
 		int gridY = searchBoxY + SEARCH_BOX_HEIGHT + INNER_PADDING;
 		itemGrid = new ItemGridWidget(gridX, gridY, GRID_COLUMNS, GRID_ROWS);
 
+		// Position refresh button (top-right corner, next to search box)
+		refreshButtonX = panelX + panelWidth - BORDER_PADDING - REFRESH_BUTTON_WIDTH;
+		refreshButtonY = panelY + BORDER_PADDING + 3; // Align with search box
+
 		// Load initial items
 		loadItems();
 
@@ -85,8 +111,8 @@ public class InventoryPanelOverlay {
 	}
 
 	/**
-	 * Loads items from the database into the grid.
-	 * Always loads from ALL dimensions.
+	 * Loads items from ChestSyncManager (server as source of truth).
+	 * Aggregates data from all synced chests across all players.
 	 */
 	private void loadItems() {
 		if (itemGrid == null) return;
@@ -94,8 +120,8 @@ public class InventoryPanelOverlay {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null) return;
 
-		// Always load from all dimensions (dimension = null)
-		itemGrid.loadItems(databaseManager, null);
+		// Load from ChestSyncManager (server data)
+		itemGrid.loadItems(chestSyncManager);
 		updateSearchResults();
 	}
 
@@ -130,6 +156,9 @@ public class InventoryPanelOverlay {
 
 		// Render search box
 		searchBox.render(guiGraphics, mouseX, mouseY, partialTick);
+
+		// Render refresh button
+		renderRefreshButton(guiGraphics, mouseX, mouseY);
 
 		// Render item grid
 		itemGrid.render(guiGraphics, mouseX, mouseY);
@@ -172,6 +201,51 @@ public class InventoryPanelOverlay {
 		int innerBorderColor = 0xFFC0C0C0;
 		guiGraphics.fill(panelX + 1, panelY + 1, panelX + panelWidth - 1, panelY + 2, innerBorderColor); // Top inner
 		guiGraphics.fill(panelX + 1, panelY + 1, panelX + 2, panelY + panelHeight - 1, innerBorderColor); // Left inner
+	}
+
+	/**
+	 * Renders the refresh button for manually syncing from server.
+	 */
+	private void renderRefreshButton(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+		Font font = Minecraft.getInstance().font;
+
+		// Check if mouse is hovering
+		boolean isHovered = mouseX >= refreshButtonX && mouseX < refreshButtonX + REFRESH_BUTTON_WIDTH &&
+		                    mouseY >= refreshButtonY && mouseY < refreshButtonY + REFRESH_BUTTON_HEIGHT;
+
+		// Button background color
+		int bgColor;
+		if (isRefreshing) {
+			bgColor = 0xFF555555; // Gray when refreshing
+		} else if (isHovered) {
+			bgColor = 0xFF4A90E2; // Blue when hovered
+		} else {
+			bgColor = 0xFF3A3A3A; // Dark gray normally
+		}
+
+		// Draw button background
+		guiGraphics.fill(refreshButtonX, refreshButtonY,
+		                 refreshButtonX + REFRESH_BUTTON_WIDTH,
+		                 refreshButtonY + REFRESH_BUTTON_HEIGHT,
+		                 bgColor);
+
+		// Draw button border
+		int borderColor = isHovered ? 0xFFFFFFFF : 0xFF808080;
+		guiGraphics.fill(refreshButtonX, refreshButtonY,
+		                 refreshButtonX + REFRESH_BUTTON_WIDTH, refreshButtonY + 1, borderColor); // Top
+		guiGraphics.fill(refreshButtonX, refreshButtonY + REFRESH_BUTTON_HEIGHT - 1,
+		                 refreshButtonX + REFRESH_BUTTON_WIDTH, refreshButtonY + REFRESH_BUTTON_HEIGHT, borderColor); // Bottom
+		guiGraphics.fill(refreshButtonX, refreshButtonY,
+		                 refreshButtonX + 1, refreshButtonY + REFRESH_BUTTON_HEIGHT, borderColor); // Left
+		guiGraphics.fill(refreshButtonX + REFRESH_BUTTON_WIDTH - 1, refreshButtonY,
+		                 refreshButtonX + REFRESH_BUTTON_WIDTH, refreshButtonY + REFRESH_BUTTON_HEIGHT, borderColor); // Right
+
+		// Button text
+		String buttonText = isRefreshing ? "..." : "Sync";
+		int textX = refreshButtonX + (REFRESH_BUTTON_WIDTH - font.width(buttonText)) / 2;
+		int textY = refreshButtonY + (REFRESH_BUTTON_HEIGHT - font.lineHeight) / 2;
+		int textColor = isRefreshing ? 0xFF999999 : 0xFFFFFFFF;
+		guiGraphics.drawString(font, buttonText, textX, textY, textColor);
 	}
 
 	/**
@@ -226,6 +300,11 @@ public class InventoryPanelOverlay {
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (!initialized) return false;
 
+		// Check refresh button click
+		if (handleRefreshButtonClick(mouseX, mouseY)) {
+			return true;
+		}
+
 		// Check search box click - just focus it
 		if (searchBox.isMouseOver(mouseX, mouseY)) {
 			searchBox.setFocused(true);
@@ -243,6 +322,71 @@ public class InventoryPanelOverlay {
 		ItemStack clickedItem = itemGrid.handleClick(mouseX, mouseY);
 		if (clickedItem != null && !clickedItem.isEmpty()) {
 			handleItemClick(clickedItem);
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Handles refresh button click - fetches latest data from server.
+	 */
+	private boolean handleRefreshButtonClick(double mouseX, double mouseY) {
+		// Check if click is within button bounds
+		if (mouseX >= refreshButtonX && mouseX < refreshButtonX + REFRESH_BUTTON_WIDTH &&
+		    mouseY >= refreshButtonY && mouseY < refreshButtonY + REFRESH_BUTTON_HEIGHT) {
+
+			// Check cooldown
+			long currentTime = System.currentTimeMillis();
+			if (currentTime - lastRefreshTime < REFRESH_COOLDOWN_MS) {
+				Minecraft.getInstance().player.displayClientMessage(
+					Component.literal("§c[Inventory Network] Please wait before refreshing again"),
+					true
+				);
+				return true;
+			}
+
+			// Check if already refreshing
+			if (isRefreshing) {
+				return true;
+			}
+
+			// Get JWT token from WebSocket manager
+			String jwtToken = WebSocketManager.getInstance().getJwtToken();
+			if (jwtToken == null || jwtToken.isEmpty()) {
+				Minecraft.getInstance().player.displayClientMessage(
+					Component.literal("§c[Inventory Network] Not authenticated. Please reconnect."),
+					true
+				);
+				return true;
+			}
+
+			// Start refresh
+			isRefreshing = true;
+			lastRefreshTime = currentTime;
+
+			Minecraft.getInstance().player.displayClientMessage(
+				Component.literal("§6[Inventory Network] Syncing from server..."),
+				true
+			);
+
+			// Refresh from server (async)
+			chestSyncManager.refreshFromServer(apiClient, jwtToken).thenAccept(success -> {
+				isRefreshing = false;
+				if (success) {
+					Minecraft.getInstance().player.displayClientMessage(
+						Component.literal("§a[Inventory Network] Sync complete! (" +
+							chestSyncManager.getChestCount() + " chests)"),
+						true
+					);
+				} else {
+					Minecraft.getInstance().player.displayClientMessage(
+						Component.literal("§c[Inventory Network] Sync failed. Check connection."),
+						true
+					);
+				}
+			});
+
 			return true;
 		}
 

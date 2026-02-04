@@ -17,12 +17,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Handles highlighting chests that contain items the player is holding
+ * Handles highlighting chests that contain items the player is holding.
+ * Now uses ChestSyncManager as the single source of truth (server data).
  */
 public class ChestHighlighter {
 	private static final int HIGHLIGHT_RADIUS = 50;
 
-	private final DatabaseManager databaseManager;
+	private final ChestSyncManager chestSyncManager;
 
 	// Highlighting state
 	private Set<BlockPos> highlightedChests = new HashSet<>();
@@ -39,8 +40,8 @@ public class ChestHighlighter {
 	private int highlightTimer = 0;
 	private boolean isHighlightActive = false;
 
-	public ChestHighlighter(DatabaseManager databaseManager) {
-		this.databaseManager = databaseManager;
+	public ChestHighlighter(ChestSyncManager chestSyncManager) {
+		this.chestSyncManager = chestSyncManager;
 	}
 
 	public void tick(Minecraft client) {
@@ -56,7 +57,7 @@ public class ChestHighlighter {
 			highlightTimer++;
 			if (highlightTimer >= HIGHLIGHT_DURATION_TICKS) {
 				clearHighlights();
-				if (client.player != null && databaseManager.isDebugLogsEnabled()) {
+				if (client.player != null) {
 					client.player.displayClientMessage(
 						Component.literal("§7[Inventory Network] Highlighting cleared."),
 						true
@@ -281,6 +282,7 @@ public class ChestHighlighter {
 	 * Called when user clicks an item in the UI panel.
 	 * This is now the ONLY way to trigger highlighting.
 	 * Highlighting will automatically clear after 10 seconds.
+	 * Uses ChestSyncManager as source of truth (server data).
 	 *
 	 * @param itemName The display name of the item to search for
 	 */
@@ -295,38 +297,57 @@ public class ChestHighlighter {
 		isHighlightActive = false; // Will be set to true if chests are found
 
 		BlockPos playerPos = client.player.blockPosition();
-		String dimension = client.level.dimension().location().toString();
 
-		List<int[]> chestsWithItem = databaseManager.findChestsWithItem(
-			playerPos.getX(),
-			playerPos.getY(),
-			playerPos.getZ(),
-			HIGHLIGHT_RADIUS,
-			dimension,
-			itemName
-		);
+		// Search all synced chests from server
+		for (ChestSyncManager.ChestSnapshot chest : chestSyncManager.getAllChests()) {
+			// Check proximity (within HIGHLIGHT_RADIUS blocks)
+			double distance = Math.sqrt(
+				Math.pow(chest.x - playerPos.getX(), 2) +
+				Math.pow(chest.y - playerPos.getY(), 2) +
+				Math.pow(chest.z - playerPos.getZ(), 2)
+			);
 
-		for (int[] pos : chestsWithItem) {
-			highlightedChests.add(new BlockPos(pos[0], pos[1], pos[2]));
+			if (distance > HIGHLIGHT_RADIUS) {
+				continue; // Too far away
+			}
+
+			// Check if chest contains item matching the display name
+			if (chestContainsItemByName(chest, itemName)) {
+				highlightedChests.add(new BlockPos(chest.x, chest.y, chest.z));
+			}
 		}
 
 		if (!highlightedChests.isEmpty()) {
 			isHighlightActive = true; // Start the timer
-			if (databaseManager.isDebugLogsEnabled()) {
-				client.player.displayClientMessage(
-					Component.literal("§6[Inventory Network] Found " + highlightedChests.size() +
-						" chest(s) with " + itemName + " nearby! (10s timer)"),
-					true
-				);
-			}
+			client.player.displayClientMessage(
+				Component.literal("§6[Inventory Network] Found " + highlightedChests.size() +
+					" chest(s) with " + itemName + " nearby! (10s timer)"),
+				true
+			);
 		} else {
-			if (databaseManager.isDebugLogsEnabled()) {
-				client.player.displayClientMessage(
-					Component.literal("§c[Inventory Network] No chests with " + itemName + " found nearby."),
-					true
-				);
+			client.player.displayClientMessage(
+				Component.literal("§c[Inventory Network] No chests with " + itemName + " found nearby."),
+				true
+			);
+		}
+	}
+
+	/**
+	 * Checks if a chest contains an item matching the display name.
+	 */
+	private boolean chestContainsItemByName(ChestSyncManager.ChestSnapshot chest, String displayName) {
+		if (chest.items == null) return false;
+
+		for (String slotKey : chest.items.keySet()) {
+			var itemObj = chest.items.getAsJsonObject(slotKey);
+			if (itemObj.has("name")) {
+				String itemDisplayName = itemObj.get("name").getAsString();
+				if (itemDisplayName.equals(displayName)) {
+					return true;
+				}
 			}
 		}
+		return false;
 	}
 
 	/**

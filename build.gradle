@@ -39,13 +39,19 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-	// H2 Database for local storage
-	implementation 'com.h2database:h2:2.2.224'
-	include 'com.h2database:h2:2.2.224'
+	// H2 Database removed - server is now source of truth
 
 	// HTTP client for BookKeeper API
 	implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 	include 'com.squareup.okhttp3:okhttp:4.12.0'
+
+	// OkHttp dependencies (Kotlin runtime required for OkHttp 4.x)
+	implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
+	include 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
+	implementation 'com.squareup.okio:okio:3.6.0'
+	include 'com.squareup.okio:okio:3.6.0'
+	implementation 'com.squareup.okio:okio-jvm:3.6.0'
+	include 'com.squareup.okio:okio-jvm:3.6.0'
 
 	// JSON parsing
 	implementation 'com.google.code.gson:gson:2.10.1'
