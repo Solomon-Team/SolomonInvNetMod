@@ -56,10 +56,6 @@ dependencies {
 	// JSON parsing
 	implementation 'com.google.code.gson:gson:2.10.1'
 	include 'com.google.code.gson:gson:2.10.1'
-
-	// Ultralight HTML/CSS rendering engine (LWJGL bindings)
-	// Note: Local JAR cannot use 'include' for jar-in-jar, will be bundled separately
-	implementation files('libs/lwjgl-ultralight.jar')
 }
 
 processResources {
@@ -90,19 +86,6 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
-}
-
-// Copy Ultralight native libraries to run directory
-task copyUltralightNatives(type: Copy) {
-	from 'natives/windows-x64'
-	into 'run/natives'
-}
-
-// Ensure natives are copied before running client
-tasks.named('runClient') {
-	dependsOn copyUltralightNatives
-	// Add native library path for Ultralight DLLs
-	jvmArgs '-Djava.library.path=natives'
 }
 
 // configure the maven publication

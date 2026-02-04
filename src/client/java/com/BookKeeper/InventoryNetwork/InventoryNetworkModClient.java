@@ -2,16 +2,8 @@ package com.BookKeeper.InventoryNetwork;
 
 import com.BookKeeper.InventoryNetwork.api.SchematicSyncApiImpl;
 import com.BookKeeper.InventoryNetwork.api.SchematicSyncApiProvider;
-import com.BookKeeper.InventoryNetwork.ui.HelloWorldOverlay;
 import com.BookKeeper.InventoryNetwork.ui.InventoryPanelOverlay;
-import com.BookKeeper.InventoryNetwork.ultralight.UltralightInventoryOverlay;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.minecraft.client.KeyMapping;
-import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.resources.ResourceLocation;
-import org.lwjgl.glfw.GLFW;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -62,15 +54,6 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 
 	// Tick counter for periodic tasks
 	private int tickCounter = 0;
-
-	// Hello World overlay keybind
-	private static KeyMapping helloWorldKey;
-
-	// Ultralight Inventory overlay keybind
-	private static KeyMapping ultralightInventoryKey;
-
-	// Ultralight render mode toggle keybind
-	private static KeyMapping ultralightRenderModeKey;
 
 	// Track if chest was open in previous tick (for detecting close)
 	private boolean wasChestOpen = false;
@@ -144,43 +127,6 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 
 		// Register client tick event
 		ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
-
-		// Register Hello World keybind (H key)
-		helloWorldKey = new KeyMapping(
-			"key.inventorynetwork.helloworld",
-			InputConstants.Type.KEYSYM,
-			GLFW.GLFW_KEY_H,
-			new KeyMapping.Category(ResourceLocation.fromNamespaceAndPath("inventorynetwork", "keys"))
-		);
-		KeyBindingHelper.registerKeyBinding(helloWorldKey);
-
-		// Register HUD render callback for Hello World overlay
-		HudRenderCallback.EVENT.register((guiGraphics, tickCounter) -> {
-			HelloWorldOverlay.render(guiGraphics);
-		});
-
-		// Register Ultralight Inventory keybind (I key)
-		ultralightInventoryKey = new KeyMapping(
-			"key.inventorynetwork.ultralight_inventory",
-			InputConstants.Type.KEYSYM,
-			GLFW.GLFW_KEY_I,
-			new KeyMapping.Category(ResourceLocation.fromNamespaceAndPath("inventorynetwork", "keys"))
-		);
-		KeyBindingHelper.registerKeyBinding(ultralightInventoryKey);
-
-		// Register HUD render callback for Ultralight Inventory overlay
-		HudRenderCallback.EVENT.register((guiGraphics, tickCounter) -> {
-			UltralightInventoryOverlay.render(guiGraphics);
-		});
-
-		// Register Ultralight render mode toggle keybind (B key)
-		ultralightRenderModeKey = new KeyMapping(
-			"key.inventorynetwork.ultralight_rendermode",
-			InputConstants.Type.KEYSYM,
-			GLFW.GLFW_KEY_B,
-			new KeyMapping.Category(ResourceLocation.fromNamespaceAndPath("inventorynetwork", "keys"))
-		);
-		KeyBindingHelper.registerKeyBinding(ultralightRenderModeKey);
 
 		// Database removed - no shutdown hook needed
 	}
@@ -263,23 +209,6 @@ public class InventoryNetworkModClient implements ClientModInitializer {
 
 	private void onClientTick(Minecraft client) {
 		tickCounter++;
-
-		// Handle Hello World keybind
-		while (helloWorldKey.consumeClick()) {
-			HelloWorldOverlay.toggle();
-		}
-
-		// Handle Ultralight Inventory keybind
-		while (ultralightInventoryKey.consumeClick()) {
-			UltralightInventoryOverlay.toggle();
-		}
-
-		// Handle Ultralight render mode toggle keybind (only when overlay is visible)
-		while (ultralightRenderModeKey.consumeClick()) {
-			if (UltralightInventoryOverlay.isVisible()) {
-				UltralightInventoryOverlay.toggleRenderMode();
-			}
-		}
 
 		// Check if chest was closed (screen changed from chest to non-chest)
 		boolean isChestOpen = false;
